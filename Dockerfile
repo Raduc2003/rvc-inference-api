@@ -38,5 +38,4 @@ RUN mkdir -p ./rvc_models/rmvpe
 # ---------- Runtime Config ----------
 EXPOSE 5050
 
-# Use the python -m command to start the API directly
-CMD ["/home/appuser/app/venv/bin/python", "-m", "rvc.api", "--host", "0.0.0.0", "--port", "5050", "--device", "cuda:0", "--models_path", "rvc_models"]
+CMD ["sh", "-c", "echo '--- Checking for rvc in site-packages ---' && ls -l /home/appuser/app/venv/lib/python3.10/site-packages/ | grep rvc && echo '--- Checking venv bin directory ---' && ls -l /home/appuser/app/venv/bin/ && echo '--- Listing all installed packages ---' && /home/appuser/app/venv/bin/pip list"]
