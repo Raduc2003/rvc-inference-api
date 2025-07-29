@@ -1,9 +1,10 @@
+# The core RVC library
+infer-rvc
+
+# For the web server
 fastapi
 uvicorn[standard]
+python-multipart
+
+# For audio processing
 soundfile
-
-# Pull CircuitCM’s RVC‑inference wheel as “inferrvc”
-inferrvc @ https://github.com/CircuitCM/RVC-inference/raw/main/dist/inferrvc-1.0-py3-none-any.whl
-
-# (CPU‑only torch—omit or swap for CUDA link if you need GPU)
-torch --find-links https://download.pytorch.org/whl/cpu/torch_stable.html
