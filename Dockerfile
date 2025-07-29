@@ -32,8 +32,9 @@ RUN venv/bin/pip install --no-cache-dir -r requirements.txt
 RUN venv/bin/pip install --force-reinstall --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # ---------- Application Setup ----------
-# Copy your FastAPI application code into the container
-COPY main.py .
+# ** THE FIX IS HERE **
+# Copy your FastAPI application code from the correct path
+COPY app/main.py .
 
 # ---------- Runtime Config ----------
 EXPOSE 5050
