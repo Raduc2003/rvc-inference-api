@@ -24,19 +24,22 @@ RUN python3 -m venv venv
 # Install a specific, older version of pip for compatibility
 RUN venv/bin/pip install --no-cache-dir "pip==23.3.2"
 
-# Copy and install rvc-python and its dependencies.
+# Copy and install all Python dependencies
 COPY requirements.txt .
 RUN venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # Now, FORCE the installation of the correct GPU-enabled torch.
 RUN venv/bin/pip install --force-reinstall --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# ---------- Models & Launcher ----------
-RUN mkdir -p ./rvc_models/rmvpe
+# ---------- Application Setup ----------
+# Copy your FastAPI application code into the container
+COPY main.py .
 
 # ---------- Runtime Config ----------
 EXPOSE 5050
 
-# ** THE FIX IS HERE **
-# Use the correct module name: inferrvc.api
-CMD ["/home/appuser/app/venv/bin/python", "-m", "inferrvc.api", "--host", "0.0.0.0", "--port", "5050", "--device", "cuda:0", "--models_path", "rvc_models"]
+# Set the default model directory used by your main.py script
+ENV RVC_MODELDIR=/models
+
+# Run the FastAPI app with Uvicorn
+CMD ["/home/appuser/app/venv/bin/uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5050"]
