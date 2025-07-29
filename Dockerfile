@@ -5,7 +5,7 @@ FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        ffmpeg sox python3.10-venv python3-pip git build-essential && \
+        ffmpeg sox python3.10-venv python3-pip git build-essential python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and grant ownership of the app directory
@@ -25,7 +25,7 @@ RUN python3 -m venv venv
 RUN venv/bin/pip install --no-cache-dir "pip==23.3.2"
 
 # Copy and install rvc-python and its dependencies.
-# This will succeed now that build-essential is installed.
+# This will succeed now that all build tools are installed.
 COPY requirements.txt .
 RUN venv/bin/pip install --no-cache-dir -r requirements.txt
 
