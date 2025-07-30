@@ -1,10 +1,10 @@
-# The core RVC library
-infer-rvc
+# CircuitCM’s RVC-Inference API
+https://github.com/CircuitCM/RVC-inference/raw/main/dist/inferrvc-1.0-py3-none-any.whl
 
-# For the web server
+# Web framework
 fastapi
 uvicorn[standard]
 python-multipart
 
-# For audio processing
+# Audio processing
 soundfile
