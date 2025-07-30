@@ -26,14 +26,14 @@ def load_models():
     current_model_name = next(iter(models.keys()))
 
 # Pydantic model for inference parameters\class Params(BaseModel):
-    f0_up_key: int = None
-    index_rate: float = None
-    filter_radius: int = None
-    resample_sr: int = None
-    output_frequency: int = None
-    return_blocking: bool = None
-    output_device: str = None
-    output_volume: float = None
+    f0_up_key:        int     = None
+    index_rate:       float   = None
+    filter_radius:    int     = None
+    resample_sr:      int     = None
+    output_frequency: int     = None
+    return_blocking:  bool    = None
+    output_device:    str     = None
+    output_volume:    float   = None
 
 @app.get("/models")
 def list_models():
