@@ -24,7 +24,9 @@ RUN pip install --upgrade "pip==23.3.2"
 
 # ---------- Install rvc-python & Dependencies ----------
 # CPU + API support (includes Fairseq, pyworld, etc.)
-RUN pip install rvc-python
+# install the fixed rvc-python release and required extras
+RUN pip install "rvc-python==0.1.5" python-multipart
+
 
 # GPU-accelerated PyTorch & TorchAudio for CUDA 12.1
 RUN pip install --no-cache-dir \
