@@ -19,35 +19,28 @@ USER appuser
 # ---------- Python Virtual Environment ----------
 RUN python3.10 -m venv venv
 ENV PATH="/home/appuser/app/venv/bin:$PATH"
-# Pin pip below 24.1 to avoid omegaconf metadata errors
+# Pin pip below 24.1 to avoid omegaconf metadata issues
 RUN pip install --upgrade "pip==23.3.2"
 
-# ---------- Install rvc-python & Dependencies ----------
-# CPU + API support (includes Fairseq, pyworld, etc.)
-# install the fixed rvc-python release and required extras
-RUN pip install "rvc-python==0.1.5" python-multipart tensorboardX
-
-# GPU-accelerated PyTorch & TorchAudio for CUDA 12.1
+# ---------- Install Python Dependencies ----------
+# rvc-python fixed release + extras, runpod SDK, and pinned torch/torchaudio
 RUN pip install --no-cache-dir \
-        torch torchaudio \
-        --index-url https://download.pytorch.org/whl/cu121
+    runpod "rvc-python==0.1.5" python-multipart tensorboardX && \
+    pip install --no-cache-dir \
+    torch==2.7.1+cu121 torchaudio==2.7.1+cu121 \
+    --index-url https://download.pytorch.org/whl/cu121
 
 # ---------- Configure Model Directory ----------
-# Set environment variable for RVC to locate models on the attached network volume
 ENV RVC_MODELDIR=/runpod-volume/models
-# Create a symlink so legacy paths (/models) work if referenced in code
-RUN ln -s /runpod-volume/models /rvc_models || true
+# Fallback symlinks for legacy expectations
+RUN ln -s /runpod-volume/models /models || true && \
+    ln -s /runpod-volume/models /rvc_models || true
 
-# ---------- Expose API Port ----------
-EXPOSE 5050
-
-# copy the handler into the image
+# ---------- Copy handler ----------
 COPY runpod_handler.py .
 
-# install runpod SDK (needed for serverless handler) and any extras
-RUN pip install runpod
+# ---------- Expose Port (harmless for serverless) ----------
+EXPOSE 5050
 
-# entrypoint: run the handler (not the built-in HTTP server)
+# ---------- Entry Point ----------
 CMD ["python3", "-u", "runpod_handler.py"]
-
-
