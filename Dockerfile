@@ -40,9 +40,11 @@ RUN ln -s /runpod-volume/models /models || true && \
 
 # ---------- Copy handler ----------
 COPY runpod_handler.py .
+COPY dump_api_exports.py .
 
 # ---------- Expose Port (harmless for serverless) ----------
 EXPOSE 5050
 
 # ---------- Entry Point ----------
-CMD ["python3", "-u", "runpod_handler.py"]
+#CMD ["python3", "-u", "runpod_handler.py"]
+CMD ["python3", "-u", "dump_api_exports.py"]
