@@ -1,29 +1,30 @@
-# runpod.py
 import runpod.serverless
 from fastapi.testclient import TestClient
-from main import app  # your FastAPI app
+from rvc_python.api import app  # Import the FastAPI app inside rvc-python
 
 client = TestClient(app)
 
 def handler(job):
     """
-    job: { "id": "...", "input": { "api": { "method": "...", "endpoint": "..." }, "payload": {...} } }
+    job["input"] = {
+      "api": {"method":"GET"|"POST", "endpoint":"/models" or "/convert"},
+      "payload": {...}
+    }
     """
-    method   = job["input"]["api"]["method"]
-    endpoint = job["input"]["api"]["endpoint"]
+    api      = job["input"]["api"]
     payload  = job["input"].get("payload", {})
 
-    # Dispatch internally to FastAPI
-    if method.upper() == "GET":
-        resp = client.get(endpoint, params=payload)
+    # Dispatch internally to the rvc_python FastAPI app
+    if api["method"].upper() == "GET":
+        resp = client.get(api["endpoint"], params=payload)
     else:
-        resp = client.post(endpoint, json=payload)
+        resp = client.post(api["endpoint"], json=payload)
 
-    # Return the JSON or raw content depending on your route
+    # Return parsed JSON (or raw bytes for audio)
     try:
         return resp.json()
     except ValueError:
         return resp.content
 
-# Register the handler with RunPod Serverless
+# Start the serverless worker with our handler
 runpod.serverless.start({"handler": handler})
