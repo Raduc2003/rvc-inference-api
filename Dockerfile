@@ -19,17 +19,23 @@ USER appuser
 # ---------- Python Virtual Environment ----------
 RUN python3.10 -m venv venv
 ENV PATH="/home/appuser/app/venv/bin:$PATH"
-# Pin pip below 24.1 to avoid omegaconf metadata errors :contentReference[oaicite:4]{index=4}
+# Pin pip below 24.1 to avoid omegaconf metadata errors
 RUN pip install --upgrade "pip==23.3.2"
 
 # ---------- Install rvc-python & Dependencies ----------
-# CPU + API support (includes Fairseq, pyworld, etc.) :contentReference[oaicite:5]{index=5}
+# CPU + API support (includes Fairseq, pyworld, etc.)
 RUN pip install rvc-python
 
-# GPU-accelerated PyTorch & TorchAudio for CUDA 12.1 :contentReference[oaicite:6]{index=6}
+# GPU-accelerated PyTorch & TorchAudio for CUDA 12.1
 RUN pip install --no-cache-dir \
         torch torchaudio \
         --index-url https://download.pytorch.org/whl/cu121
+
+# ---------- Configure Model Directory ----------
+# Set environment variable for RVC to locate models on the attached network volume
+ENV RVC_MODELDIR=/runpod-volume/models
+# Create a symlink so legacy paths (/models) work if referenced in code
+RUN ln -s /runpod-volume/models /models || true
 
 # ---------- Expose API Port ----------
 EXPOSE 5050
