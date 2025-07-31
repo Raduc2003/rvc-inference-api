@@ -1,15 +1,23 @@
 # runpod_handler.py
 import runpod.serverless
 from fastapi.testclient import TestClient
-from rvc_python.api import create_app  # use the factory
+from rvc_python.api import create_app
 import os
 import base64
 import io
-import soundfile as sf
 
-# Instantiate the FastAPI app using the provided factory
-app = create_app()
-client = TestClient(app)
+def list_models_directly():
+    model_dir = os.getenv("RVC_MODELDIR", "/runpod-volume/models")
+    if not os.path.isdir(model_dir):
+        return {"models": []}
+    names = []
+    for entry in os.listdir(model_dir):
+        path = os.path.join(model_dir, entry)
+        if os.path.isdir(path):
+            names.append(entry)
+        elif entry.endswith(".pth"):
+            names.append(os.path.splitext(entry)[0])
+    return {"models": names}
 
 def handler(job):
     inp = job.get("input", {})
@@ -18,32 +26,37 @@ def handler(job):
     endpoint = api.get("endpoint", "/models")
     payload = inp.get("payload", {})
 
-    # Dispatch internally to the rvc-python API
-    if method == "GET":
-        resp = client.get(endpoint, params=payload)
-    else:
-        # Special handling if calling /convert: expect base64 audio in payload
-        if endpoint.startswith("/convert"):
-            # Example payload expected: {"file_b64": "data:audio/wav;base64,...", "speaker_id": 0}
-            files = {}
-            data = {}
-            file_b64 = payload.get("file_b64")
-            if file_b64:
-                header, encoded = file_b64.split(",", 1)
-                audio_bytes = base64.b64decode(encoded)
-                # rvc-python expects multipart form; simulate upload
-                files["file"] = ("input.wav", io.BytesIO(audio_bytes), "audio/wav")
-            speaker_id = payload.get("speaker_id", 0)
-            data["speaker_id"] = speaker_id
-            resp = client.post(endpoint, files=files, data=data)
+    # Short-circuit GET /models
+    if endpoint == "/models" and method == "GET":
+        return list_models_directly()
+
+    # Otherwise use rvc-python internal API
+    app = create_app()
+    with TestClient(app) as client:
+        # Ensure the models directory is set (so other endpoints have a chance)
+        models_dir = os.getenv("RVC_MODELDIR", "/runpod-volume/models")
+        client.post("/set_models_dir", json={"models_dir": models_dir})
+
+        if method == "GET":
+            resp = client.get(endpoint, params=payload)
         else:
-            resp = client.post(endpoint, json=payload)
+            if endpoint.startswith("/convert"):
+                files = {}
+                data = {}
+                file_b64 = payload.get("file_b64")
+                if file_b64:
+                    header, encoded = file_b64.split(",", 1)
+                    audio_bytes = base64.b64decode(encoded)
+                    files["file"] = ("input.wav", io.BytesIO(audio_bytes), "audio/wav")
+                speaker_id = payload.get("speaker_id", 0)
+                data["speaker_id"] = speaker_id
+                resp = client.post(endpoint, files=files, data=data)
+            else:
+                resp = client.post(endpoint, json=payload)
 
-    # Return the response content (JSON or raw)
-    try:
-        return resp.json()
-    except ValueError:
-        return resp.content
+        try:
+            return resp.json()
+        except ValueError:
+            return resp.content
 
-# Start the serverless handler
 runpod.serverless.start({"handler": handler})
