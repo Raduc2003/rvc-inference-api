@@ -43,4 +43,5 @@ EXPOSE 5050
 # ---------- Launch the rvc-python API Server ----------
 # -p 5050 : serve on port 5050
 # -l      : allow external connections
-CMD ["python3", "-m", "rvc_python", "api", "-p", "5050", "-l"]
+CMD ["python3", "-u", "runpod_handler.py"]
+
