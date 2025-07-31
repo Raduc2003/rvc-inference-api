@@ -22,12 +22,14 @@ ENV PATH="/home/appuser/app/venv/bin:$PATH"
 # Pin pip below 24.1 to avoid omegaconf metadata issues
 RUN pip install --upgrade "pip==23.3.2"
 
-# ---------- Install Python Dependencies ----------
-# rvc-python fixed release + extras, runpod SDK, and pinned torch/torchaudio
+# ---------- Install Python Dependencies # ---------- Install Python Dependencies ----------
+# rvc-python fixed release + extras and runpod SDK
 RUN pip install --no-cache-dir \
-    runpod "rvc-python==0.1.5" python-multipart tensorboardX && \
-    pip install --no-cache-dir \
-    torch==2.7.1+cu121 torchaudio==2.7.1+cu121 \
+    runpod "rvc-python==0.1.5" python-multipart tensorboardX
+
+# GPU-accelerated PyTorch & TorchAudio for CUDA 12.1 (actual available versions)
+RUN pip install --no-cache-dir \
+    torch==2.5.1+cu121 torchaudio==2.5.1+cu121 \
     --index-url https://download.pytorch.org/whl/cu121
 
 # ---------- Configure Model Directory ----------
