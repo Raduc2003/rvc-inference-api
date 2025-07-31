@@ -35,13 +35,18 @@ RUN pip install --no-cache-dir \
 # Set environment variable for RVC to locate models on the attached network volume
 ENV RVC_MODELDIR=/runpod-volume/models
 # Create a symlink so legacy paths (/models) work if referenced in code
-RUN ln -s /runpod-volume/models /models || true
+RUN ln -s /runpod-volume/models /rvc_models || true
 
 # ---------- Expose API Port ----------
 EXPOSE 5050
 
-# ---------- Launch the rvc-python API Server ----------
-# -p 5050 : serve on port 5050
-# -l      : allow external connections
+# copy the handler into the image
+COPY runpod_handler.py .
+
+# install runpod SDK (needed for serverless handler) and any extras
+RUN pip install runpod
+
+# entrypoint: run the handler (not the built-in HTTP server)
 CMD ["python3", "-u", "runpod_handler.py"]
+
 
