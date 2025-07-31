@@ -46,5 +46,5 @@ COPY dump_api_exports.py .
 EXPOSE 5050
 
 # ---------- Entry Point ----------
-#CMD ["python3", "-u", "runpod_handler.py"]
-CMD ["python3", "-u", "dump_api_exports.py"]
+CMD ["python3", "-u", "runpod_handler.py"]
+#CMD ["python3", "-u", "dump_api_exports.py"]
