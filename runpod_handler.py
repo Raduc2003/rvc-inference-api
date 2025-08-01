@@ -1,9 +1,9 @@
+# runpod_handler.py
 import runpod.serverless
 from fastapi.testclient import TestClient
 from rvc_python.api import create_app
 import os
 import base64
-import io
 
 def list_models_directly():
     model_dir = os.getenv("RVC_MODELDIR", "/runpod-volume/models")
@@ -29,34 +29,28 @@ def handler(job):
     if endpoint == "/models" and method == "GET":
         return list_models_directly()
 
-    # Otherwise use rvc-python internal API
+    # Build and enter the app context so startup runs
     app = create_app()
     with TestClient(app) as client:
-        # Ensure the models directory is set so internal state can initialize properly
+        # 1. Set models directory (required)
         models_dir = os.getenv("RVC_MODELDIR", "/runpod-volume/models")
         client.post("/set_models_dir", json={"models_dir": models_dir})
 
+        # If the job wants to load a model (or ensure it's loaded before convert), do it here
+        model_name = payload.get("model_name") or payload.get("model")  # accept either key
+        if model_name:
+            client.post(f"/models/{model_name}", json={})
+
+        # Dispatch based on endpoint
         if method == "GET":
             resp = client.get(endpoint, params=payload)
         else:
-            if endpoint.startswith("/convert"):
-                # Prefer raw base64 audio_data if provided
+            if endpoint == "/convert":
+                # Expect raw base64 audio_data in payload
                 audio_data = payload.get("audio_data")
-                if audio_data:
-                    # send JSON with audio_data
-                    resp = client.post("/convert", json={"audio_data": audio_data})
-                else:
-                    # fallback to file_b64 (data URI), convert to raw base64
-                    file_b64 = payload.get("file_b64")
-                    if file_b64:
-                        if file_b64.startswith("data:"):
-                            _, encoded = file_b64.split(",", 1)
-                        else:
-                            encoded = file_b64
-                        resp = client.post("/convert", json={"audio_data": encoded})
-                    else:
-                        # Neither provided: forward raw payload in case other shapes are supported
-                        resp = client.post(endpoint, json=payload)
+                if not audio_data:
+                    return {"error": "Missing audio_data in payload for /convert"}
+                resp = client.post("/convert", json={"audio_data": audio_data})
             else:
                 resp = client.post(endpoint, json=payload)
 
