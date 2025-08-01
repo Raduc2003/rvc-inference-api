@@ -1,9 +1,9 @@
 # runpod_handler.py
 import runpod.serverless
-from fastapi.testclient import TestClient
-from rvc_python.api import create_app
 import os
 import base64
+from pathlib import Path
+from rvc_python.infer import RVCInference
 
 def list_models_directly():
     model_dir = os.getenv("RVC_MODELDIR", "/runpod-volume/models")
@@ -21,42 +21,61 @@ def list_models_directly():
 def handler(job):
     inp = job.get("input", {})
     api = inp.get("api", {})
-    method = api.get("method", "GET").upper()
     endpoint = api.get("endpoint", "/models")
+    method = api.get("method", "GET").upper()
     payload = inp.get("payload", {})
 
-    # Short-circuit GET /models
+    # List models
     if endpoint == "/models" and method == "GET":
         return list_models_directly()
 
-    # Build and enter the app context so startup runs
-    app = create_app()
-    with TestClient(app) as client:
-        # 1. Set models directory (required)
-        models_dir = os.getenv("RVC_MODELDIR", "/runpod-volume/models")
-        client.post("/set_models_dir", json={"models_dir": models_dir})
+    # Combined load-model + convert
+    if endpoint == "/convert" and method == "POST":
+        model_name = payload.get("model_name")
+        audio_b64 = payload.get("audio_data")
+        if not model_name or not audio_b64:
+            return {"error": "Both model_name and audio_data are required for /convert"}
 
-        # If the job wants to load a model (or ensure it's loaded before convert), do it here
-        model_name = payload.get("model_name") or payload.get("model")  # accept either key
-        if model_name:
-            client.post(f"/models/{model_name}", json={})
+        model_dir = os.getenv("RVC_MODELDIR", "/runpod-volume/models")
+        model_folder = Path(model_dir) / model_name
 
-        # Dispatch based on endpoint
-        if method == "GET":
-            resp = client.get(endpoint, params=payload)
-        else:
-            if endpoint == "/convert":
-                # Expect raw base64 audio_data in payload
-                audio_data = payload.get("audio_data")
-                if not audio_data:
-                    return {"error": "Missing audio_data in payload for /convert"}
-                resp = client.post("/convert", json={"audio_data": audio_data})
-            else:
-                resp = client.post(endpoint, json=payload)
+        if not model_folder.exists():
+            return {"error": f"Model folder not found: {model_folder}"}
+
+        # Discover .pth file inside
+        pth_files = list(model_folder.glob("*.pth"))
+        if not pth_files:
+            return {"error": f"No .pth model found under {model_folder}"}
+        model_path = str(pth_files[0])
 
         try:
-            return resp.json()
-        except ValueError:
-            return resp.content
+            # Instantiate RVCInference and load model
+            rvc = RVCInference(device="cuda:0")
+            rvc.load_model(model_path)
+
+            # Decode input audio
+            audio_bytes = base64.b64decode(audio_b64)
+            temp_in = "/tmp/input.wav"
+            temp_out = "/tmp/output.wav"
+            with open(temp_in, "wb") as f:
+                f.write(audio_bytes)
+
+            # Run inference (this uses the same interface as CLI)
+            rvc.infer_file(temp_in, temp_out)
+
+            # Read output and encode
+            with open(temp_out, "rb") as f:
+                out_bytes = f.read()
+            out_b64 = base64.b64encode(out_bytes).decode("utf-8")
+            return {"converted_audio": f"data:audio/wav;base64,{out_b64}"}
+
+        except Exception as e:
+            return {
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            }
+
+    # Fallback
+    return {"error": f"Unsupported endpoint/method combination: {method} {endpoint}"}
 
 runpod.serverless.start({"handler": handler})
