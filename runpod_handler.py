@@ -1,4 +1,3 @@
-# runpod_handler.py
 import runpod.serverless
 from fastapi.testclient import TestClient
 from rvc_python.api import create_app
@@ -33,7 +32,7 @@ def handler(job):
     # Otherwise use rvc-python internal API
     app = create_app()
     with TestClient(app) as client:
-        # Ensure the models directory is set (so other endpoints have a chance)
+        # Ensure the models directory is set so internal state can initialize properly
         models_dir = os.getenv("RVC_MODELDIR", "/runpod-volume/models")
         client.post("/set_models_dir", json={"models_dir": models_dir})
 
@@ -41,16 +40,23 @@ def handler(job):
             resp = client.get(endpoint, params=payload)
         else:
             if endpoint.startswith("/convert"):
-                files = {}
-                data = {}
-                file_b64 = payload.get("file_b64")
-                if file_b64:
-                    header, encoded = file_b64.split(",", 1)
-                    audio_bytes = base64.b64decode(encoded)
-                    files["file"] = ("input.wav", io.BytesIO(audio_bytes), "audio/wav")
-                speaker_id = payload.get("speaker_id", 0)
-                data["speaker_id"] = speaker_id
-                resp = client.post(endpoint, files=files, data=data)
+                # Prefer raw base64 audio_data if provided
+                audio_data = payload.get("audio_data")
+                if audio_data:
+                    # send JSON with audio_data
+                    resp = client.post("/convert", json={"audio_data": audio_data})
+                else:
+                    # fallback to file_b64 (data URI), convert to raw base64
+                    file_b64 = payload.get("file_b64")
+                    if file_b64:
+                        if file_b64.startswith("data:"):
+                            _, encoded = file_b64.split(",", 1)
+                        else:
+                            encoded = file_b64
+                        resp = client.post("/convert", json={"audio_data": encoded})
+                    else:
+                        # Neither provided: forward raw payload in case other shapes are supported
+                        resp = client.post(endpoint, json=payload)
             else:
                 resp = client.post(endpoint, json=payload)
 
