@@ -3,6 +3,7 @@ import runpod.serverless
 import os
 import base64
 from pathlib import Path
+from shutil import copyfile
 from rvc_python.infer import RVCInference
 
 # Global caches
@@ -61,7 +62,6 @@ def handler(job):
         if not isinstance(params, dict):
             return {"error": "params must be a dict"}
 
-        # Save/update
         _model_params[model_name] = params
         return {"updated": params}
 
@@ -76,39 +76,51 @@ def handler(job):
     if endpoint == "/convert" and method == "POST":
         model_name = payload.get("model_name")
         audio_b64 = payload.get("audio_data")
-        if not model_name or not audio_b64:
-            return {"error": "Both model_name and audio_data are required for /convert"}
+        input_path = payload.get("input_path")  # new: relative or absolute path
+        if not model_name:
+            return {"error": "model_name is required for /convert"}
 
         try:
             rvc = get_or_load_inference(model_name)
         except Exception as e:
             return {"error_type": type(e).__name__, "error_message": str(e)}
 
-        # Apply stored params if any (mapping naming to what RVCInference expects)
+        # Apply stored params if any
         params = _model_params.get(model_name, {})
-        # Example params that might exist: pitch_algo, pitch_lvl, index_influence, filter_radius, etc.
-        # rvc-python's RVCInference interface might expose these via attributes or method args.
-        # If needed, you can adapt by monkey-patching or using its internal config API.
-        # For simplicity, we'll assume you can set attributes directly if supported:
         for k, v in params.items():
             try:
                 setattr(rvc, k, v)
             except Exception:
-                # ignore unknown params; alternatively collect/report them
                 pass
 
+        temp_in = "/tmp/input.wav"
+        temp_out = "/tmp/output.wav"
+
         try:
-            # Decode input audio
-            audio_bytes = base64.b64decode(audio_b64)
-            temp_in = "/tmp/input.wav"
-            temp_out = "/tmp/output.wav"
-            with open(temp_in, "wb") as f:
-                f.write(audio_bytes)
+            if audio_b64:
+                # Inline base64 audio (legacy)
+                audio_bytes = base64.b64decode(audio_b64)
+                with open(temp_in, "wb") as f:
+                    f.write(audio_bytes)
+                source = temp_in
+            elif input_path:
+                # Resolve against mounted volume if relative
+                if not os.path.isabs(input_path):
+                    input_full = os.path.join("/runpod-volume", input_path.lstrip("/"))
+                else:
+                    input_full = input_path
+                if not os.path.isfile(input_full):
+                    return {"error": f"input_path does not exist: {input_full}"}
+                # copy to temp_in for consistent interface
+                copyfile(input_full, temp_in)
+                source = temp_in
+            else:
+                return {"error": "Either audio_data or input_path is required for /convert"}
 
             # Perform inference
-            rvc.infer_file(temp_in, temp_out)
+            rvc.infer_file(source, temp_out)
 
-            # Read and encode output
+            # Read and return output
             with open(temp_out, "rb") as f:
                 out_bytes = f.read()
             out_b64 = base64.b64encode(out_bytes).decode("utf-8")
