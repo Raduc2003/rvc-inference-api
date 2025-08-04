@@ -73,58 +73,58 @@ def handler(job):
         return {"params": _model_params.get(model_name, {})}
 
     # Combined load-model + convert with inline or path-based input
-if endpoint == "/convert" and method == "POST":
-    print(f"[handler] /convert payload keys: {list(payload.keys())}")
-
-    model_name = payload.get("model_name")
-    audio_b64  = payload.get("audio_data")
-    input_path = payload.get("input_path") or payload.get("path") or payload.get("key")
-
-    if not model_name:
-        return {"error": "model_name is required for /convert"}
-
-    # load or retrieve inference
-    try:
-        rvc = get_or_load_inference(model_name)
-    except Exception as e:
-        return {"error_type": type(e).__name__, "error_message": str(e)}
-
-    # apply stored params
-    for k, v in _model_params.get(model_name, {}).items():
-        try: setattr(rvc, k, v)
-        except: pass
-
-    temp_in  = "/tmp/input.wav"
-    temp_out = "/tmp/output.wav"
-
-    try:
-        if audio_b64:
-            print("[handler] decoding inline base64 audio_data")
-            data = base64.b64decode(audio_b64)
-            with open(temp_in, "wb") as f: f.write(data)
-
-        elif input_path:
-            print(f"[handler] using input_path: {input_path}")
-            # resolve relative to the volume mount
-            full = input_path if os.path.isabs(input_path) \
-                else os.path.join("/runpod-volume", input_path.lstrip("/"))
-            if not os.path.isfile(full):
-                return {"error": f"input_path not found: {full}"}
-            from shutil import copyfile
-            copyfile(full, temp_in)
-
-        else:
-            return {"error": "Either audio_data or input_path is required"}
-
-        # run inference
-        rvc.infer_file(temp_in, temp_out)
-
-        with open(temp_out, "rb") as f:
-            out = f.read()
-        out_b64 = base64.b64encode(out).decode("utf-8")
-        return {"converted_audio": f"data:audio/wav;base64,{out_b64}"}
-
-    except Exception as e:
-        return {"error_type": type(e).__name__, "error_message": str(e)}
+    if endpoint == "/convert" and method == "POST":
+        print(f"[handler] /convert payload keys: {list(payload.keys())}")
+    
+        model_name = payload.get("model_name")
+        audio_b64  = payload.get("audio_data")
+        input_path = payload.get("input_path") or payload.get("path") or payload.get("key")
+    
+        if not model_name:
+            return {"error": "model_name is required for /convert"}
+    
+        # load or retrieve inference
+        try:
+            rvc = get_or_load_inference(model_name)
+        except Exception as e:
+            return {"error_type": type(e).__name__, "error_message": str(e)}
+    
+        # apply stored params
+        for k, v in _model_params.get(model_name, {}).items():
+            try: setattr(rvc, k, v)
+            except: pass
+    
+        temp_in  = "/tmp/input.wav"
+        temp_out = "/tmp/output.wav"
+    
+        try:
+            if audio_b64:
+                print("[handler] decoding inline base64 audio_data")
+                data = base64.b64decode(audio_b64)
+                with open(temp_in, "wb") as f: f.write(data)
+    
+            elif input_path:
+                print(f"[handler] using input_path: {input_path}")
+                # resolve relative to the volume mount
+                full = input_path if os.path.isabs(input_path) \
+                    else os.path.join("/runpod-volume", input_path.lstrip("/"))
+                if not os.path.isfile(full):
+                    return {"error": f"input_path not found: {full}"}
+                from shutil import copyfile
+                copyfile(full, temp_in)
+    
+            else:
+                return {"error": "Either audio_data or input_path is required"}
+    
+            # run inference
+            rvc.infer_file(temp_in, temp_out)
+    
+            with open(temp_out, "rb") as f:
+                out = f.read()
+            out_b64 = base64.b64encode(out).decode("utf-8")
+            return {"converted_audio": f"data:audio/wav;base64,{out_b64}"}
+    
+        except Exception as e:
+            return {"error_type": type(e).__name__, "error_message": str(e)}
 
 runpod.serverless.start({"handler": handler})
