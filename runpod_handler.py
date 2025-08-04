@@ -72,66 +72,59 @@ def handler(job):
             return {"error": "model_name is required for /get_params"}
         return {"params": _model_params.get(model_name, {})}
 
-    # Combined load-model + convert with applied params
-    if endpoint == "/convert" and method == "POST":
-        model_name = payload.get("model_name")
-        audio_b64 = payload.get("audio_data")
-        input_path = payload.get("input_path")  # new: relative or absolute path
-        if not model_name:
-            return {"error": "model_name is required for /convert"}
+    # Combined load-model + convert with inline or path-based input
+if endpoint == "/convert" and method == "POST":
+    print(f"[handler] /convert payload keys: {list(payload.keys())}")
 
-        try:
-            rvc = get_or_load_inference(model_name)
-        except Exception as e:
-            return {"error_type": type(e).__name__, "error_message": str(e)}
+    model_name = payload.get("model_name")
+    audio_b64  = payload.get("audio_data")
+    input_path = payload.get("input_path") or payload.get("path") or payload.get("key")
 
-        # Apply stored params if any
-        params = _model_params.get(model_name, {})
-        for k, v in params.items():
-            try:
-                setattr(rvc, k, v)
-            except Exception:
-                pass
+    if not model_name:
+        return {"error": "model_name is required for /convert"}
 
-        temp_in = "/tmp/input.wav"
-        temp_out = "/tmp/output.wav"
+    # load or retrieve inference
+    try:
+        rvc = get_or_load_inference(model_name)
+    except Exception as e:
+        return {"error_type": type(e).__name__, "error_message": str(e)}
 
-        try:
-            if audio_b64:
-                # Inline base64 audio (legacy)
-                audio_bytes = base64.b64decode(audio_b64)
-                with open(temp_in, "wb") as f:
-                    f.write(audio_bytes)
-                source = temp_in
-            elif input_path:
-                # Resolve against mounted volume if relative
-                if not os.path.isabs(input_path):
-                    input_full = os.path.join("/runpod-volume", input_path.lstrip("/"))
-                else:
-                    input_full = input_path
-                if not os.path.isfile(input_full):
-                    return {"error": f"input_path does not exist: {input_full}"}
-                # copy to temp_in for consistent interface
-                copyfile(input_full, temp_in)
-                source = temp_in
-            else:
-                return {"error": "Either audio_data or input_path is required for /convert"}
+    # apply stored params
+    for k, v in _model_params.get(model_name, {}).items():
+        try: setattr(rvc, k, v)
+        except: pass
 
-            # Perform inference
-            rvc.infer_file(source, temp_out)
+    temp_in  = "/tmp/input.wav"
+    temp_out = "/tmp/output.wav"
 
-            # Read and return output
-            with open(temp_out, "rb") as f:
-                out_bytes = f.read()
-            out_b64 = base64.b64encode(out_bytes).decode("utf-8")
-            return {"converted_audio": f"data:audio/wav;base64,{out_b64}"}
+    try:
+        if audio_b64:
+            print("[handler] decoding inline base64 audio_data")
+            data = base64.b64decode(audio_b64)
+            with open(temp_in, "wb") as f: f.write(data)
 
-        except Exception as e:
-            return {
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-            }
+        elif input_path:
+            print(f"[handler] using input_path: {input_path}")
+            # resolve relative to the volume mount
+            full = input_path if os.path.isabs(input_path) \
+                else os.path.join("/runpod-volume", input_path.lstrip("/"))
+            if not os.path.isfile(full):
+                return {"error": f"input_path not found: {full}"}
+            from shutil import copyfile
+            copyfile(full, temp_in)
 
-    return {"error": f"Unsupported endpoint/method: {method} {endpoint}"}
+        else:
+            return {"error": "Either audio_data or input_path is required"}
+
+        # run inference
+        rvc.infer_file(temp_in, temp_out)
+
+        with open(temp_out, "rb") as f:
+            out = f.read()
+        out_b64 = base64.b64encode(out).decode("utf-8")
+        return {"converted_audio": f"data:audio/wav;base64,{out_b64}"}
+
+    except Exception as e:
+        return {"error_type": type(e).__name__, "error_message": str(e)}
 
 runpod.serverless.start({"handler": handler})
